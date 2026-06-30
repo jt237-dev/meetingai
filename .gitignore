@@ -1,0 +1,30 @@
+# ─── Secrets (NE JAMAIS COMMITER) ───────────────────────────
+.env
+*.env
+!.env.example
+
+# ─── Python / Backend ───────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+env/
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# ─── Node / Frontend ────────────────────────────────────────
+node_modules/
+dist/
+build/
+.vite/
+*.local
+
+# ─── Divers ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+*.zip
+cce602ad-5be9-4b0e-ae3a-bdc5658f7db2.zip
