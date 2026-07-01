@@ -53,11 +53,23 @@ async def upload_meeting_file(
             except:
                 pass
 
+        # La durée doit être un entier (minutes). L'IA renvoie parfois du texte
+        # ("120 minutes environ") : on extrait le nombre, sinon on met None.
+        raw_duration = analysis.get("duration")
+        duration_value = None
+        if isinstance(raw_duration, int):
+            duration_value = raw_duration
+        elif isinstance(raw_duration, str):
+            import re as _re
+            m = _re.search(r"\d+", raw_duration)
+            if m:
+                duration_value = int(m.group())
+
         # Créer la réunion en base
         db_meeting = Meeting(
             title=analysis.get("title", file.filename),
             date=meeting_date,
-            duration=analysis.get("duration"),
+            duration=duration_value,
             status=MeetingStatus.completed,
             summary=analysis.get("summary"),
             transcript=transcript,

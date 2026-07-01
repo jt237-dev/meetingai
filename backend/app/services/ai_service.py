@@ -388,7 +388,7 @@ Retourne UNIQUEMENT ce JSON (pas de texte avant ou après) :
 {{
   "title": "titre court et descriptif de la réunion",
   "date": "date au format ISO 8601 si mentionnée, sinon null",
-  "duration": null,
+  "duration": "durée en MINUTES sous forme de NOMBRE ENTIER uniquement (ex: 120), jamais de texte comme '120 minutes'. null si inconnue",
   "ai_confidence": "score entier de 0 à 100 représentant ta confiance dans la JUSTESSE de ce que tu as extrait compte tenu du texte disponible (PAS une note de qualité de l'enregistrement)",
   "lieu": "lieu de la réunion si mentionné, sinon null",
   "heure_debut": "heure de début au format HH:MM si mentionnée, sinon null",
