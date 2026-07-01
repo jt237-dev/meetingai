@@ -7,7 +7,7 @@ import {
   ListTodo, ChevronDown, ChevronUp, Loader2,
   ArrowLeft, FileText
 } from 'lucide-react';
-import { getMeeting, exportPDF } from '../lib/api';
+import { getMeeting, exportPDF, exportDOCX } from '../lib/api';
 
 interface Participant { name: string; role: string | null; }
 interface Task { id: number; title: string; assigned_to: string | null; due_date: string | null; status: string; }
@@ -103,6 +103,25 @@ export function MeetingDetail() {
       window.URL.revokeObjectURL(url);
     } catch {
       alert('Erreur lors de l\'export PDF.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleExportDocx = async () => {
+    if (!meeting) return;
+    setExportLoading(true);
+    setShowExportMenu(false);
+    try {
+      const res = await exportDOCX(meeting.id);
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `CR_${meeting.title.slice(0, 40)}.docx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert('Erreur lors de l\'export Word.');
     } finally {
       setExportLoading(false);
     }
@@ -205,6 +224,7 @@ export function MeetingDetail() {
                 </button>
                 {showExportMenu && (
                   <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-50 w-48">
+                    <p className="px-4 pt-3 pb-1 text-[10px] uppercase font-bold text-gray-400 tracking-wider">PDF</p>
                     {[
                       { label: '📄 Classique', value: 'classic' },
                       { label: '✨ Élégant', value: 'elegant' },
@@ -218,6 +238,14 @@ export function MeetingDetail() {
                         {t.label}
                       </button>
                     ))}
+                    <div className="border-t border-gray-100" />
+                    <p className="px-4 pt-3 pb-1 text-[10px] uppercase font-bold text-gray-400 tracking-wider">Word</p>
+                    <button
+                      onClick={handleExportDocx}
+                      className="w-full px-4 py-3 text-sm font-bold text-left text-[#333333] hover:bg-gray-50 transition-colors"
+                    >
+                      📝 Gabarit Comité d'Étude
+                    </button>
                   </div>
                 )}
               </div>

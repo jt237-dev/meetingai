@@ -82,4 +82,11 @@ export const exportPDF = (
   })
 }
 
+// ── Export Word (.docx) ─────────────────────────────────────────
+export const exportDOCX = (meetingId: number) => {
+  return api.get(`/export/meeting/${meetingId}/docx`, {
+    responseType: 'blob',
+  })
+}
+
 export default api
