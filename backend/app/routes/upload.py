@@ -15,6 +15,7 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 
 UPLOAD_DIR = "uploads"
 ALLOWED_EXTENSIONS = {".vtt", ".docx", ".txt", ".srt"}
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/")
 async def upload_meeting_file(
