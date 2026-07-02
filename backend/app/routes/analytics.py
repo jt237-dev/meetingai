@@ -73,7 +73,7 @@ def get_analytics(db: Session = Depends(get_db)):
     for (year, month) in sorted(monthly.keys()):
         data = monthly[(year, month)]
         monthly_trends.append({
-            "name": f"{_MONTHS_FR[month - 1]} {str(year)[2:]}",
+            "name": f"{_MONTHS_FR[month - 1]} {str(year)[4:]}",
             "meetings": data["meetings"],
             "decisions": data["decisions"],
             "tasks": data["tasks"],
