@@ -89,4 +89,17 @@ export const exportDOCX = (meetingId: number) => {
   })
 }
 
+// ── Chatbot ─────────────────────────────────────────────────────
+export interface ChatReference {
+  id: number
+  title: string
+  date: string | null
+}
+export interface ChatResponse {
+  answer: string
+  references: ChatReference[]
+}
+export const sendChatMessage = (question: string) =>
+  api.post<ChatResponse>('/chat/', { question })
+
 export default api

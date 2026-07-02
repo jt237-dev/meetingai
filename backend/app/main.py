@@ -6,6 +6,7 @@ from app.routes import upload
 from app.routes import export 
 from app.routes import tasks as tasks_router
 from app.routes import participants as participants_router
+from app.routes import chat as chat_router
 
 import app.models
 import os
@@ -47,6 +48,7 @@ app.include_router(upload.router, prefix="/api")
 app.include_router(export.router, prefix="/api")
 app.include_router(tasks_router.router, prefix="/api")
 app.include_router(participants_router.router, prefix="/api")
+app.include_router(chat_router.router, prefix="/api")
 
 
 @app.get("/")
