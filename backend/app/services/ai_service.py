@@ -236,7 +236,9 @@ JSON à corriger :
                 "divers": None,
                 "opportunites_apprendre": [],
                 "solde_tontine": None,
-                "rapporteurs_planification": []
+                "rapporteurs_planification": [],
+                "sentiment": None,
+                "sentiment_score": None
             }
 
 
@@ -388,7 +390,7 @@ Retourne UNIQUEMENT ce JSON (pas de texte avant ou après) :
 {{
   "title": "titre court et descriptif de la réunion",
   "date": "date au format ISO 8601 si mentionnée, sinon null",
-  "duration": "durée en MINUTES sous forme de NOMBRE ENTIER uniquement (ex: 120), jamais de texte comme '120 minutes'. null si inconnue",
+  "duration": null,
   "ai_confidence": "score entier de 0 à 100 représentant ta confiance dans la JUSTESSE de ce que tu as extrait compte tenu du texte disponible (PAS une note de qualité de l'enregistrement)",
   "lieu": "lieu de la réunion si mentionné, sinon null",
   "heure_debut": "heure de début au format HH:MM si mentionnée, sinon null",
@@ -458,7 +460,9 @@ Retourne UNIQUEMENT ce JSON (pas de texte avant ou après) :
   "rapporteurs_planification": [
     "nom du 1er rapporteur planifié pour la prochaine séance",
     "nom du 2e rapporteur"
-  ]
+  ],
+  "sentiment": "tonalité globale de la réunion, UNIQUEMENT l'une de ces trois valeurs exactes : \\"positif\\", \\"neutre\\" ou \\"négatif\\" (juge le climat général des échanges : constructif/consensuel = positif, tendu/conflictuel = négatif, factuel/mitigé = neutre)",
+  "sentiment_score": "score entier de 0 à 100 reflétant la positivité globale du climat (0 = très négatif, 50 = neutre, 100 = très positif)"
 }}"""
 
     message = client.messages.create(

@@ -51,6 +51,10 @@ class Meeting(Base):
     opportunites_apprendre = Column(Text, nullable=True)    # JSON: liste
     solde_tontine = Column(String(100), nullable=True)
     rapporteurs_planification = Column(Text, nullable=True)  # JSON: liste
+    # Sentiment global de la réunion, extrait par l'IA lors de l'analyse.
+    # "positif" | "neutre" | "négatif" (label lisible) + score 0-100 (optionnel).
+    sentiment = Column(String(20), nullable=True)
+    sentiment_score = Column(Integer, nullable=True)
 
 
     

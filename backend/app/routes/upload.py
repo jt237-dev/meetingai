@@ -15,6 +15,10 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 
 UPLOAD_DIR = "uploads"
 ALLOWED_EXTENSIONS = {".vtt", ".docx", ".txt", ".srt"}
+
+# Crée le dossier d'upload au démarrage s'il n'existe pas. Indispensable en
+# production (Railway démarre avec un système de fichiers vierge, sans ce
+# dossier) : sans ça, l'écriture du fichier échoue et renvoie une erreur 500.
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/")
@@ -53,23 +57,11 @@ async def upload_meeting_file(
             except:
                 pass
 
-        # La durée doit être un entier (minutes). L'IA renvoie parfois du texte
-        # ("120 minutes environ") : on extrait le nombre, sinon on met None.
-        raw_duration = analysis.get("duration")
-        duration_value = None
-        if isinstance(raw_duration, int):
-            duration_value = raw_duration
-        elif isinstance(raw_duration, str):
-            import re as _re
-            m = _re.search(r"\d+", raw_duration)
-            if m:
-                duration_value = int(m.group())
-
         # Créer la réunion en base
         db_meeting = Meeting(
             title=analysis.get("title", file.filename),
             date=meeting_date,
-            duration=duration_value,
+            duration=analysis.get("duration"),
             status=MeetingStatus.completed,
             summary=analysis.get("summary"),
             transcript=transcript,
@@ -94,6 +86,8 @@ async def upload_meeting_file(
             opportunites_apprendre=json.dumps(analysis.get("opportunites_apprendre", []), ensure_ascii=False),
             solde_tontine=analysis.get("solde_tontine"),
             rapporteurs_planification=json.dumps(analysis.get("rapporteurs_planification", []), ensure_ascii=False),
+            sentiment=analysis.get("sentiment"),
+            sentiment_score=analysis.get("sentiment_score") if isinstance(analysis.get("sentiment_score"), int) else None,
         )
         db.add(db_meeting)
         db.flush()

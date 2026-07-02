@@ -102,4 +102,7 @@ export interface ChatResponse {
 export const sendChatMessage = (question: string) =>
   api.post<ChatResponse>('/chat/', { question })
 
+// ── Analytics ───────────────────────────────────────────────────
+export const getAnalytics = () => api.get('/analytics/')
+
 export default api
