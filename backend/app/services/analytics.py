@@ -5,8 +5,9 @@ que le frontend n'ait qu'à afficher.
 
 import json
 from collections import Counter, defaultdict
+from datetime import date as _date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -19,6 +20,18 @@ _MONTHS_FR = [
     "Jan", "Fév", "Mar", "Avr", "Mai", "Juin",
     "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc",
 ]
+
+
+def _period_key_and_label(d, period: str):
+    """Retourne (clé triable, libellé lisible) pour regrouper une date selon
+    la granularité choisie : semaine, mois ou année."""
+    if period == "year":
+        return (d.year,), str(d.year)
+    if period == "week":
+        iso_year, iso_week, _ = d.isocalendar()
+        return (iso_year, iso_week), f"S{iso_week} {str(iso_year)[2:]}"
+    # défaut : mois
+    return (d.year, d.month), f"{_MONTHS_FR[d.month - 1]} {str(d.year)[2:]}"
 
 
 def _parse_json_list(value):
@@ -34,7 +47,10 @@ def _parse_json_list(value):
 
 
 @router.get("/")
-def get_analytics(db: Session = Depends(get_db)):
+def get_analytics(
+    period: str = Query("month", pattern="^(week|month|year)$"),
+    db: Session = Depends(get_db),
+):
     # On ne compte que les réunions réellement analysées.
     meetings = (
         db.query(Meeting)
@@ -59,21 +75,22 @@ def get_analytics(db: Session = Depends(get_db)):
 
     total_tasks = sum(len(_parse_json_list(m.tasks)) for m in meetings)
 
-    # ── Tendances mensuelles (réunions / décisions / tâches) ──────
-    monthly = defaultdict(lambda: {"meetings": 0, "decisions": 0, "tasks": 0})
+    # ── Tendances par période (réunions / décisions / tâches) ─────
+    grouped = defaultdict(lambda: {"meetings": 0, "decisions": 0, "tasks": 0, "label": ""})
     for m in meetings:
         if not m.date:
             continue
-        key = (m.date.year, m.date.month)
-        monthly[key]["meetings"] += 1
-        monthly[key]["decisions"] += len(_parse_json_list(m.decisions))
-        monthly[key]["tasks"] += len(_parse_json_list(m.tasks))
+        key, label = _period_key_and_label(m.date, period)
+        grouped[key]["meetings"] += 1
+        grouped[key]["decisions"] += len(_parse_json_list(m.decisions))
+        grouped[key]["tasks"] += len(_parse_json_list(m.tasks))
+        grouped[key]["label"] = label
 
     monthly_trends = []
-    for (year, month) in sorted(monthly.keys()):
-        data = monthly[(year, month)]
+    for key in sorted(grouped.keys()):
+        data = grouped[key]
         monthly_trends.append({
-            "name": f"{_MONTHS_FR[month - 1]} {str(year)[2:]}",
+            "name": data["label"],
             "meetings": data["meetings"],
             "decisions": data["decisions"],
             "tasks": data["tasks"],

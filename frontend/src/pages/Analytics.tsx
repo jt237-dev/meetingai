@@ -37,13 +37,15 @@ export function Analytics() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [period, setPeriod] = useState<'week' | 'month' | 'year'>('month');
 
   useEffect(() => {
-    getAnalytics()
+    setLoading(true);
+    getAnalytics(period)
       .then((res) => setData(res.data))
       .catch(() => setError("Impossible de charger les analyses."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [period]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -139,12 +141,22 @@ export function Analytics() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-lg font-bold text-black">Tendances d'activité</h2>
-                <p className="text-sm text-gray-500 mt-1">Réunions, décisions et tâches par mois</p>
+                <p className="text-sm text-gray-500 mt-1">Réunions, décisions et tâches par période</p>
               </div>
-              <div className="flex items-center gap-4 text-xs font-bold">
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#333333]" /> Réunions</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#ee3124]" /> Décisions</span>
-                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-300" /> Tâches</span>
+              <div className="flex items-center gap-4">
+                <div className="hidden sm:flex items-center gap-4 text-xs font-bold">
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#333333]" /> Réunions</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#ee3124]" /> Décisions</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-300" /> Tâches</span>
+                </div>
+                <select
+                  value={period}
+                  onChange={(e) => setPeriod(e.target.value as 'week' | 'month' | 'year')}
+                  className="text-sm border border-gray-200 rounded-xl bg-white px-3 py-2 text-gray-600 focus:ring-[#ee3124] focus:border-[#ee3124] font-bold cursor-pointer">
+                  <option value="week">Par semaine</option>
+                  <option value="month">Par mois</option>
+                  <option value="year">Par année</option>
+                </select>
               </div>
             </div>
             <div className="h-80 w-full">

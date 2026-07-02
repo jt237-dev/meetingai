@@ -103,6 +103,13 @@ export const sendChatMessage = (question: string) =>
   api.post<ChatResponse>('/chat/', { question })
 
 // ── Analytics ───────────────────────────────────────────────────
-export const getAnalytics = () => api.get('/analytics/')
+export const getAnalytics = (period: 'week' | 'month' | 'year' = 'month') =>
+  api.get(`/analytics/?period=${period}`)
+
+// Met à jour une réunion (ex: corriger sa date).
+export const updateMeeting = (
+  id: number,
+  data: Partial<{ date: string; title: string }>
+) => api.put(`/meetings/${id}`, data)
 
 export default api
