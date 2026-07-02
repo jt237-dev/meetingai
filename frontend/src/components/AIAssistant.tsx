@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, X, Send, Bot, User, Loader2, FileText, ArrowRight } from 'lucide-react';
+import { Sparkles, X, Send, Bot, User, Loader2, FileText, ArrowRight, Maximize2, Minimize2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { sendChatMessage, ChatReference } from '../lib/api';
 
@@ -22,6 +22,7 @@ export function AIAssistant() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const suggestions = [
@@ -94,7 +95,7 @@ export function AIAssistant() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 right-0 bottom-0 w-full sm:w-96 bg-white shadow-2xl border-l border-gray-200 z-50 flex flex-col">
+            className={`fixed top-0 right-0 bottom-0 w-full bg-white shadow-2xl border-l border-gray-200 z-50 flex flex-col transition-[max-width] duration-300 ${expanded ? 'sm:max-w-[calc(100vw-16rem)]' : 'sm:max-w-96'}`}>
 
             {/* En-tête */}
             <div className="h-16 border-b border-gray-200 flex items-center justify-between px-4 bg-[#fcfcfc]">
@@ -104,11 +105,20 @@ export function AIAssistant() {
                 </div>
                 <h3 className="font-bold text-black">Assistant MeetSense</h3>
               </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setExpanded((e) => !e)}
+                  className="hidden sm:flex p-2 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
+                  title={expanded ? 'Réduire' : 'Agrandir'}>
+                  {expanded ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+                </button>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
+                  title="Fermer">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Zone de conversation */}
