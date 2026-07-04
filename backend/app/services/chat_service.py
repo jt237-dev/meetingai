@@ -1,19 +1,19 @@
-"""Service du chatbot : répond aux questions de l'utilisateur en s'appuyant
-sur l'historique des réunions stockées en base.
+"""Service du chatbot : répond aux questions sur l'historique des réunions.
 
-Stratégie « filtrage intelligent » en deux temps, économique et scalable :
+Architecture en DEUX APPELS pour minimiser le coût tout en gardant la précision :
 
-1. PRÉ-FILTRAGE (sans IA) : on charge des métadonnées légères de toutes les
-   réunions et on score chacune selon le nombre de mots de la question qu'elle
-   contient. On ne garde que les meilleures candidates. Ainsi, même avec des
-   centaines de réunions, on n'envoie qu'un petit sous-ensemble à l'IA.
+  Étape 0 - PRÉ-FILTRAGE (sans IA, gratuit) : score des réunions par mots-clés
+            de la question, on ne garde que quelques candidates.
 
-2. RÉPONSE DÉTAILLÉE (Haiku) : pour ces quelques candidates, on envoie à Claude
-   leur CONTENU STRUCTURÉ COMPLET (résumé, objectifs, décisions, recommandations
-   détaillées, tâches, résolutions, participants, etc.). Claude peut alors
-   répondre à des questions précises du type « quelle est la première
-   recommandation de la réunion sur les GAB ? » — ce qui serait impossible avec
-   un simple résumé. On renvoie la réponse + les références cliquables.
+  Étape 1 - ROUTEUR (appel IA léger) : on envoie seulement titre + résumé court
+            de chaque candidate, et l'IA choisit la/les 1-2 réunion(s) vraiment
+            nécessaire(s) pour répondre. Peu de tokens -> quasi gratuit.
+
+  Étape 2 - RÉPONSE (appel IA ciblé) : on n'envoie le CONTENU DÉTAILLÉ que des
+            1-2 réunions choisies, et l'IA rédige la réponse précise.
+
+Au lieu de détailler 4 réunions à chaque question (coûteux), on ne détaille que
+celles réellement utiles -> coût divisé, précision conservée.
 """
 
 import json
@@ -28,8 +28,12 @@ from app.models.meeting import Meeting
 
 client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-# Nombre maximal de réunions détaillées envoyées à l'IA (borne le coût).
-MAX_CANDIDATES = 4
+MODEL = "claude-haiku-4-5-20251001"
+
+# Candidates issues du pré-filtrage (envoyées au routeur, en version courte).
+MAX_CANDIDATES = 6
+# Réunions réellement détaillées pour la réponse (limite le coût de l'appel 2).
+MAX_DETAILED = 2
 
 _STOPWORDS = {
     "le", "la", "les", "un", "une", "des", "de", "du", "au", "aux", "et", "ou",
@@ -38,7 +42,7 @@ _STOPWORDS = {
     "cette", "ces", "il", "elle", "on", "nous", "vous", "ils", "elles", "se",
     "sa", "son", "ses", "leur", "leurs", "en", "y", "d", "l", "premiere",
     "premier", "deuxieme", "troisieme", "derniere", "dernier",
-    "parle", "parlait", "parle", "reunion", "reunion", "reunions", "reunions",
+    "parle", "parlait", "reunion", "reunions",
     "montre", "donne", "dire", "dis", "trouve", "cherche", "liste",
 }
 
@@ -46,11 +50,10 @@ _STOPWORDS = {
 def _normalize(text: str) -> str:
     text = text.lower()
     text = unicodedata.normalize("NFD", text)
-    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
-    return text
+    return "".join(c for c in text if unicodedata.category(c) != "Mn")
 
 
-def _keywords(question: str) -> list[str]:
+def _keywords(question: str):
     words = re.findall(r"\w+", _normalize(question))
     return [w for w in words if len(w) >= 3 and w not in _STOPWORDS]
 
@@ -82,26 +85,28 @@ def _select_candidates(meetings, question):
     kws = _keywords(question)
     if not kws:
         return sorted(meetings, key=lambda m: m.date or 0, reverse=True)[:MAX_CANDIDATES]
-
     scored = []
     for m in meetings:
         hay = _meeting_haystack(m)
         score = sum(hay.count(kw) for kw in kws)
         if score > 0:
             scored.append((score, m))
-
     if not scored:
         return sorted(meetings, key=lambda m: m.date or 0, reverse=True)[:MAX_CANDIDATES]
-
     scored.sort(key=lambda t: (t[0], t[1].date or 0), reverse=True)
     return [m for _, m in scored[:MAX_CANDIDATES]]
 
 
-def _format_list(items, numbered=False, limit=None):
+def _short(text, n=220):
+    if not text:
+        return ""
+    text = str(text).strip().replace("\n", " ")
+    return text[:n] + ("…" if len(text) > n else "")
+
+
+def _format_list(items, numbered=False):
     if not items:
         return None
-    if limit:
-        items = items[:limit]
     lines = []
     for i, it in enumerate(items, 1):
         prefix = f"{i}. " if numbered else "- "
@@ -113,10 +118,16 @@ def _format_list(items, numbered=False, limit=None):
     return "\n".join(lines)
 
 
+def _meeting_short(m: Meeting) -> str:
+    """Version COURTE (routeur) : juste de quoi choisir la bonne réunion."""
+    date_str = m.date.strftime("%d/%m/%Y") if m.date else "date inconnue"
+    return f"id={m.id} | « {m.title} » (du {date_str}) | Résumé: {_short(m.summary)}"
+
+
 def _meeting_detail(m: Meeting) -> str:
+    """Version DÉTAILLÉE (réponse) : tout le contenu structuré numéroté."""
     date_str = m.date.strftime("%d/%m/%Y") if m.date else "date inconnue"
     blocks = [f"=== REUNION id={m.id} : « {m.title} » (du {date_str}) ==="]
-
     if m.president:
         blocks.append(f"President : {m.president}")
     if m.rapporteur:
@@ -126,33 +137,18 @@ def _meeting_detail(m: Meeting) -> str:
     if m.problematique:
         blocks.append(f"Problematique : {m.problematique}")
 
-    objectifs = _format_list(_parse_json_field(m.objectifs), numbered=True)
-    if objectifs:
-        blocks.append("Objectifs :\n" + objectifs)
-
-    recos = _format_list(_parse_json_field(m.activites_recommandations), numbered=True)
-    if recos:
-        blocks.append("Recommandations / dossiers (dans l'ordre) :\n" + recos)
-
-    solutions = _format_list(_parse_json_field(m.solutions), numbered=True)
-    if solutions:
-        blocks.append("Solutions proposees :\n" + solutions)
-
-    decisions = _format_list(_parse_json_field(m.decisions), numbered=True)
-    if decisions:
-        blocks.append("Decisions prises :\n" + decisions)
-
-    resolutions = _format_list(_parse_json_field(m.resolutions), numbered=True)
-    if resolutions:
-        blocks.append("Resolutions :\n" + resolutions)
-
-    tasks = _format_list(_parse_json_field(m.tasks), numbered=True)
-    if tasks:
-        blocks.append("Taches / plan d'action :\n" + tasks)
-
-    consequences = _format_list(_parse_json_field(m.consequences))
-    if consequences:
-        blocks.append("Consequences / impacts :\n" + consequences)
+    for label, field, numbered in [
+        ("Objectifs", m.objectifs, True),
+        ("Recommandations / dossiers (dans l'ordre)", m.activites_recommandations, True),
+        ("Solutions proposees", m.solutions, True),
+        ("Decisions prises", m.decisions, True),
+        ("Resolutions", m.resolutions, True),
+        ("Taches / plan d'action", m.tasks, True),
+        ("Consequences / impacts", m.consequences, False),
+    ]:
+        formatted = _format_list(_parse_json_field(field), numbered=numbered)
+        if formatted:
+            blocks.append(f"{label} :\n{formatted}")
 
     try:
         names = [p.name for p in m.participants if getattr(p, "name", None)]
@@ -167,13 +163,52 @@ def _meeting_detail(m: Meeting) -> str:
         blocks.append(f"Faits saillants : {m.faits_saillants}")
     if m.divers:
         blocks.append(f"Divers : {m.divers}")
-
     return "\n".join(blocks)
+
+
+def _extract_json(raw: str):
+    try:
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        return json.loads(raw[start:end])
+    except Exception:
+        return None
+
+
+def _route(question: str, candidates) -> list:
+    """Appel 1 (léger) : l'IA choisit les réunions pertinentes parmi les résumés."""
+    if len(candidates) <= 1:
+        return candidates  # rien à router, on détaille directement
+
+    listing = "\n".join(_meeting_short(m) for m in candidates)
+    prompt = f"""Voici une liste de reunions (titre + resume court).
+Question de l'utilisateur : "{question}"
+
+REUNIONS :
+{listing}
+
+Indique quelles reunions il faut ouvrir en detail pour repondre a la question.
+Choisis-en le MOINS possible (idealement 1, au maximum 2).
+Reponds UNIQUEMENT par un JSON : {{"meeting_ids": [ids entiers]}}"""
+
+    msg = client.messages.create(
+        model=MODEL,
+        max_tokens=100,
+        temperature=0,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    parsed = _extract_json(msg.content[0].text.strip())
+    ids = (parsed or {}).get("meeting_ids", []) if parsed else []
+
+    by_id = {m.id: m for m in candidates}
+    chosen = [by_id[i] for i in ids if i in by_id]
+    if not chosen:
+        chosen = candidates[:1]  # repli : la meilleure candidate
+    return chosen[:MAX_DETAILED]
 
 
 def answer_question(question: str, db: Session) -> dict:
     meetings = db.query(Meeting).filter(Meeting.summary.isnot(None)).all()
-
     if not meetings:
         return {
             "answer": "Aucune reunion analysee n'est encore disponible. "
@@ -181,65 +216,52 @@ def answer_question(question: str, db: Session) -> dict:
             "references": [],
         }
 
+    # Étape 0 : pré-filtrage gratuit.
     candidates = _select_candidates(meetings, question)
-    context = "\n\n".join(_meeting_detail(m) for m in candidates)
 
+    # Étape 1 : routeur léger -> 1 à 2 réunions à détailler.
+    selected = _route(question, candidates)
+
+    # Étape 2 : réponse ciblée sur le contenu détaillé.
+    context = "\n\n".join(_meeting_detail(m) for m in selected)
     prompt = f"""Tu es un assistant intelligent specialise dans l'analyse de comptes
-rendus de reunion. Tu reponds aux questions de l'utilisateur en t'appuyant
-UNIQUEMENT sur les reunions detaillees ci-dessous. Tu raisonnes precisement :
-si on te demande « la premiere recommandation », tu prends l'element n1 de la
-liste des recommandations de la bonne reunion ; si on demande « qui est charge
-de telle tache », tu regardes le champ correspondant, etc.
+rendus de reunion. Tu reponds UNIQUEMENT a partir des reunions detaillees
+ci-dessous. Tu raisonnes precisement : « la premiere recommandation » = element
+n1 de la liste des recommandations ; « qui fait telle tache » = champ assigned_to,
+etc. Ne fabrique jamais d'information absente. Si l'info n'y est pas, dis-le.
 
-Ne fabrique jamais d'information absente de ces reunions. Si l'information
-demandee n'y figure pas, dis-le clairement.
-
-REUNIONS DISPONIBLES (contenu detaille) :
+REUNIONS (contenu detaille) :
 {context}
 
-QUESTION DE L'UTILISATEUR :
+QUESTION :
 {question}
 
-CONSIGNES DE REPONSE :
-- Reponds de facon precise, claire et naturelle, en francais, comme le ferait un
-  assistant intelligent. Cite le contenu exact quand c'est pertinent.
-- Quand la question porte sur un element ordonne (premiere/deuxieme/derniere
-  recommandation, tache, decision...), identifie le bon element par sa position.
-- Designe les reunions par leur titre (pas par leur id brut) dans ta reponse.
-- Reponds UNIQUEMENT avec un JSON valide, sans texte avant/apres, sans backticks :
+Reponds UNIQUEMENT avec un JSON valide, sans texte ni backticks :
 {{
-  "answer": "ta reponse redigee pour l'utilisateur",
-  "meeting_ids": [liste des id (entiers) des reunions reellement utilisees, ou liste vide]
+  "answer": "reponse precise, claire, en francais, en designant les reunions par leur titre",
+  "meeting_ids": [ids des reunions utilisees, ou []]
 }}"""
 
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1500,
+    msg = client.messages.create(
+        model=MODEL,
+        max_tokens=1200,
         temperature=0,
         messages=[{"role": "user", "content": prompt}],
     )
-
-    raw = message.content[0].text.strip()
-
-    try:
-        start = raw.find("{")
-        end = raw.rfind("}") + 1
-        parsed = json.loads(raw[start:end])
-    except Exception:
-        return {"answer": raw, "references": []}
+    parsed = _extract_json(msg.content[0].text.strip())
+    if not parsed:
+        return {"answer": msg.content[0].text.strip(), "references": []}
 
     answer = parsed.get("answer", "").strip() or "Je n'ai pas trouve de reponse."
     ids = parsed.get("meeting_ids", []) or []
 
-    by_id = {m.id: m for m in candidates}
-    references = []
-    for mid in ids:
-        m = by_id.get(mid)
-        if m:
-            references.append({
-                "id": m.id,
-                "title": m.title,
-                "date": m.date.isoformat() if m.date else None,
-            })
-
+    by_id = {m.id: m for m in selected}
+    references = [
+        {
+            "id": m.id,
+            "title": m.title,
+            "date": m.date.isoformat() if m.date else None,
+        }
+        for mid in ids if (m := by_id.get(mid))
+    ]
     return {"answer": answer, "references": references}
