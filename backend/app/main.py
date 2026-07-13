@@ -8,8 +8,10 @@ from app.routes import tasks as tasks_router
 from app.routes import participants as participants_router
 from app.routes import chat as chat_router
 from app.routes import analytics as analytics_router
+from app.routes import auth as auth_router
 
 import app.models
+from app.models import user as _user_model  # enregistre la table users
 import os
 
 
@@ -51,8 +53,16 @@ app.include_router(tasks_router.router, prefix="/api")
 app.include_router(participants_router.router, prefix="/api")
 app.include_router(chat_router.router, prefix="/api")
 app.include_router(analytics_router.router, prefix="/api")
+app.include_router(auth_router.router, prefix="/api")
+
+from app.core.init_admin import create_initial_admin
+
+@app.on_event("startup")
+def _startup():
+    create_initial_admin()
 
 
 @app.get("/")
 def root():
     return {"message": "MeetingAI API is running 🚀"}
+
