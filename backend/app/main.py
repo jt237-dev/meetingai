@@ -59,7 +59,7 @@ from app.core.init_admin import create_initial_admin
 
 @app.on_event("startup")
 def _startup():
-    create_initial_admin()
+    create_initial_admin() 
 
 
 @app.get("/")

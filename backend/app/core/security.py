@@ -23,18 +23,33 @@ from app.models.user import User
 # bcrypt : algorithme de hachage lent par conception (résiste au brute-force).
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# bcrypt refuse tout mot de passe de plus de 72 OCTETS (limite de l'algorithme).
+# On tronque donc systématiquement avant de hacher ET de vérifier, sinon un mot
+# de passe long fait planter le hachage. 72 octets, c'est déjà énorme pour un
+# mot de passe (l'immense majorité fait 12-30 caractères).
+_BCRYPT_MAX_BYTES = 72
+
+
+def _truncate(password: str) -> str:
+    """Tronque proprement à 72 octets (et non 72 caractères : un accent = 2 octets)."""
+    encoded = password.encode("utf-8")
+    if len(encoded) <= _BCRYPT_MAX_BYTES:
+        return password
+    # On coupe à 72 octets puis on ignore un éventuel caractère coupé en deux.
+    return encoded[:_BCRYPT_MAX_BYTES].decode("utf-8", errors="ignore")
+
 # Indique à FastAPI où le client obtient un jeton (utile pour la doc /docs).
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 
 def hash_password(password: str) -> str:
     """Transforme un mot de passe en empreinte irréversible."""
-    return pwd_context.hash(password)
+    return pwd_context.hash(_truncate(password))
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Vérifie qu'un mot de passe correspond à son empreinte stockée."""
-    return pwd_context.verify(plain_password, hashed_password)
+    return pwd_context.verify(_truncate(plain_password), hashed_password)
 
 
 def create_access_token(subject: str) -> str:
