@@ -5,6 +5,7 @@ from app.core.security import (
     create_access_token,
     get_current_user,
     hash_password,
+    require_admin,
     verify_password,
 )
 from app.database import get_db
@@ -13,10 +14,13 @@ from app.schemas.user import (
     PasswordChange,
     ProfileUpdate,
     Token,
+    UserCreateByAdmin,
+    UserCreatedResponse,
+    UserListItem,
     UserLogin,
     UserOut,
-    UserRegister,
 )
+from app.services.email_service import generate_password, send_credentials_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -41,26 +45,73 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
     return {"access_token": token, "token_type": "bearer", "user": user}
 
 
-@router.post("/register", response_model=Token, status_code=201)
-def register(payload: UserRegister, db: Session = Depends(get_db)):
-    """Inscription d'un nouvel utilisateur (non admin)."""
+@router.post("/users", response_model=UserCreatedResponse, status_code=201)
+def create_user_by_admin(
+    payload: UserCreateByAdmin,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Crée un utilisateur — RÉSERVÉ AUX ADMINISTRATEURS.
+
+    Le mot de passe est généré aléatoirement par le serveur et envoyé par email
+    au destinataire : l'admin ne le connaît jamais. Si l'envoi de l'email échoue,
+    le compte est quand même créé (email_sent = false) pour ne pas bloquer.
+    """
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
 
+    password = generate_password()
+
     user = User(
         email=payload.email,
-        hashed_password=hash_password(payload.password),
+        hashed_password=hash_password(password),
         full_name=payload.full_name,
-        is_admin=False,
+        is_admin=payload.is_admin,
         is_active=True,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    token = create_access_token(subject=user.email)
-    return {"access_token": token, "token_type": "bearer", "user": user}
+    email_sent = send_credentials_email(
+        to_email=user.email,
+        full_name=user.full_name,
+        password=password,
+    )
+
+    return {"user": user, "email_sent": email_sent}
+
+
+@router.get("/users", response_model=list[UserListItem])
+def list_users(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Liste tous les utilisateurs — RÉSERVÉ AUX ADMINISTRATEURS."""
+    return db.query(User).order_by(User.id).all()
+
+
+@router.delete("/users/{user_id}")
+def delete_user(
+    user_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Supprime un utilisateur — RÉSERVÉ AUX ADMINISTRATEURS."""
+    if user_id == admin.id:
+        raise HTTPException(
+            status_code=400,
+            detail="Vous ne pouvez pas supprimer votre propre compte",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    db.delete(user)
+    db.commit()
+    return {"message": "Utilisateur supprimé"}
 
 
 @router.get("/me", response_model=UserOut)

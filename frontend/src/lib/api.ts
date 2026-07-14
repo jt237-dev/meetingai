@@ -189,4 +189,28 @@ export const updateMeeting = (
   data: Partial<{ date: string; title: string }>
 ) => api.put(`/meetings/${id}`, data)
 
+// ── Gestion des utilisateurs (admin) ────────────────────────────
+export interface UserListItem {
+  id: number
+  email: string
+  full_name: string | null
+  is_admin: boolean
+  is_active: boolean
+}
+
+export const listUsers = () => api.get<UserListItem[]>('/auth/users')
+
+export const createUser = (
+  email: string,
+  full_name?: string,
+  is_admin: boolean = false
+) =>
+  api.post<{ user: UserListItem; email_sent: boolean }>('/auth/users', {
+    email,
+    full_name,
+    is_admin,
+  })
+
+export const deleteUser = (id: number) => api.delete(`/auth/users/${id}`)
+
 export default api

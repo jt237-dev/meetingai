@@ -91,3 +91,17 @@ def get_current_user(
     if not user or not user.is_active:
         raise credentials_error
     return user
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Dépendance : n'autorise que les administrateurs.
+
+    À utiliser sur les routes réservées à l'admin (création d'utilisateurs...).
+    Un utilisateur normal reçoit une erreur 403 (interdit).
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Action réservée aux administrateurs",
+        )
+    return current_user

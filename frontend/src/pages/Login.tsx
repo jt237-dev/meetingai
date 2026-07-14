@@ -1,17 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Mail, Lock, ArrowRight, Loader2, AlertCircle, User } from 'lucide-react';
-import { login, register } from '../lib/api';
+import { Sparkles, Mail, Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { login } from '../lib/api';
 
 export function Login() {
   const navigate = useNavigate();
 
-  // Bascule entre connexion et création de compte.
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,37 +18,17 @@ export function Login() {
       setError('Veuillez renseigner votre email et votre mot de passe.');
       return;
     }
-    if (mode === 'register' && password.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caractères.');
-      return;
-    }
 
     setLoading(true);
     setError(null);
     try {
-      if (mode === 'login') {
-        await login(email, password);
-      } else {
-        await register(email, password, fullName || undefined);
-      }
+      await login(email, password);
       navigate('/');
     } catch (err: any) {
-      const detail = err?.response?.data?.detail;
-      setError(
-        detail ||
-          (mode === 'login'
-            ? 'Email ou mot de passe incorrect.'
-            : "Impossible de créer le compte.")
-      );
+      setError(err?.response?.data?.detail || 'Email ou mot de passe incorrect.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const switchMode = () => {
-    setMode((m) => (m === 'login' ? 'register' : 'login'));
-    setError(null);
-    setPassword('');
   };
 
   return (
@@ -93,7 +69,7 @@ export function Login() {
         </div>
       </div>
 
-      {/* Panneau droit — formulaire */}
+      {/* Panneau droit — formulaire de connexion */}
       <div className="flex-1 flex flex-col justify-center px-4 sm:px-6 lg:px-20 xl:px-32 bg-[#fcfcfc]">
         <div className="mx-auto w-full max-w-sm lg:max-w-md">
           <div className="lg:hidden flex items-center gap-2 font-bold text-2xl text-black tracking-tight mb-8">
@@ -103,37 +79,12 @@ export function Login() {
             MeetSense AI
           </div>
 
-          <h2 className="text-3xl font-bold text-black mb-2">
-            {mode === 'login' ? 'Bon retour' : 'Créer un compte'}
-          </h2>
+          <h2 className="text-3xl font-bold text-black mb-2">Bon retour</h2>
           <p className="text-gray-500 mb-8">
-            {mode === 'login'
-              ? 'Connectez-vous à votre espace de travail.'
-              : 'Renseignez vos informations pour rejoindre l’espace de travail.'}
+            Connectez-vous à votre espace de travail.
           </p>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
-            {/* Nom complet — uniquement à l'inscription */}
-            {mode === 'register' && (
-              <div>
-                <label className="block text-sm font-bold text-[#333333] mb-1">
-                  Nom complet
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ee3124]/20 focus:border-[#ee3124] transition-all"
-                    placeholder="Junior Tsafack"
-                  />
-                </div>
-              </div>
-            )}
-
             {/* Email */}
             <div>
               <label className="block text-sm font-bold text-[#333333] mb-1">
@@ -167,16 +118,11 @@ export function Login() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  autoComplete="current-password"
                   className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#ee3124]/20 focus:border-[#ee3124] transition-all"
                   placeholder="••••••••"
                 />
               </div>
-              {mode === 'register' && (
-                <p className="text-xs text-gray-400 mt-1.5 font-medium">
-                  6 caractères minimum.
-                </p>
-              )}
             </div>
 
             {/* Message d'erreur */}
@@ -187,7 +133,6 @@ export function Login() {
               </div>
             )}
 
-            {/* Bouton principal */}
             <button
               type="submit"
               disabled={loading}
@@ -197,23 +142,17 @@ export function Login() {
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <>
-                  {mode === 'login' ? "Se connecter à l'espace de travail" : 'Créer mon compte'}
+                  Se connecter à l'espace de travail
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Bascule connexion / inscription */}
+          {/* Les comptes sont créés par l'administrateur : pas d'inscription libre. */}
           <p className="text-center text-sm text-gray-500 mt-8">
-            {mode === 'login' ? "Vous n'avez pas de compte ?" : 'Vous avez déjà un compte ?'}{' '}
-            <button
-              type="button"
-              onClick={switchMode}
-              className="font-bold text-[#ee3124] hover:text-[#d42b1f] transition-colors"
-            >
-              {mode === 'login' ? 'Créer un compte' : 'Se connecter'}
-            </button>
+            Pas encore de compte ? Contactez votre administrateur pour qu'il vous
+            en crée un. Vous recevrez vos identifiants par email.
           </p>
         </div>
       </div>
